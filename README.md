@@ -1,14 +1,15 @@
 ## Withdraw App
 
-Тестовое приложение для страницы вывода средств (Withdraw) на Next.js App Router + TypeScript + Zustand.
+Тестовое приложение для страницы вывода средств (Withdraw) на Next.js App Router + TypeScript + feature-based архитектуре.
 
 ### Стек
 
 - Next.js 16 (App Router, `src/app`)
 - React 19
 - TypeScript
-- Zustand — управление состоянием формы и флоу вывода
+- Zustand — управление состоянием фичи Withdraw
 - Jest + Testing Library — unit/интеграционные тесты UI
+- Playwright — e2e-тест потока вывода
 
 ### Как запустить
 
@@ -29,14 +30,17 @@ npm test
 
 ### Архитектура
 
-- `src/app/withdraw/page.tsx` — страница Withdraw, обёртка вокруг формы и описание флоу.
-- `src/components/WithdrawForm.tsx` — форма с полями `amount`, `destination`, `confirm`, кнопкой submit и отображением состояний/ошибок/успешной заявки.
-- `src/store/withdrawStore.ts` — Zustand-стор:
-  - состояние: `amount`, `destination`, `confirm`, `status` (`idle` | `loading` | `success` | `error`), `error`, `lastRequestId`, `lastRequestAt`, `idempotencyKey`, `lastWithdrawal`;
-  - экшены: `setAmount`, `setDestination`, `setConfirm`, `submit`, `retry`, `reset`.
-- `src/lib/api/withdrawals.ts` — тонкий клиент над API:
-  - `createWithdrawal(payload, { idempotencyKey })` → POST `/api/v1/withdrawals`;
-  - `getWithdrawal(id)` → GET `/api/v1/withdrawals/{id}`.
+- `src/app/withdraw/page.tsx` — страница Withdraw, отвечает только за layout и тексты, подключает фичу через `@/features/withdraw`.
+- `src/features/withdraw/` — модуль фичи:
+  - `api/withdrawals.ts` — типы `Withdrawal`, `CreateWithdrawalRequest/Response`, функция `createWithdrawal` и `getWithdrawal`, использующие общий HTTP-клиент;
+  - `model/withdrawStore.ts` — Zustand-стор:
+    - состояние: `amount`, `destination`, `network`, `confirm`, `status` (`idle` | `loading` | `success` | `error`), `error`, `lastRequestId`, `lastRequestAt`, `idempotencyKey`, `lastWithdrawal`;
+    - экшены: `setAmount`, `setDestination`, `setNetwork`, `setConfirm`, `submit`, `retry`, `reset`;
+    - persistence: сохранение последней заявки в `localStorage` и восстановление при reload в течение 5 минут;
+  - `ui/WithdrawForm.tsx` — форма с полями `amount`, `network` (5 популярных сетей USDT), `destination`, `confirm`, состояниями и тостом успеха.
+- `src/shared/api/httpClient.ts` — общий HTTP-клиент:
+  - `httpRequest<T>()` — обёртка над `fetch` с разбором JSON/текста;
+  - `HttpError` — единый тип ошибки с `status` и `payload`.
 - `src/app/api/v1/withdrawals/route.ts` — mock POST:
   - читает `Idempotency-Key` из заголовка;
   - при повторе с тем же ключом возвращает `409` с понятным сообщением;
@@ -55,8 +59,8 @@ npm test
 
 - Состояния стора:
   - `idle` — начальное состояние, пустая форма;
-  - `loading` — сабмит в процессе, кнопка disabled, текст `"Submitting..."`;
-  - `success` — отображается блок `"Withdrawal created"` с данными заявки;
+  - `loading` — сабмит в процессе, кнопка disabled, текст `"Отправляем..."`;
+  - `success` — отображается тост об успешном создании заявки и блок `"Заявка создана"` с данными заявки;
   - `error` — показывается сообщение ошибки и кнопка `Retry`.
 - Защита от двойного submit:
   - пока `status === "loading"`, экшен `submit()` не делает повторные запросы;
@@ -72,7 +76,7 @@ npm test
 - `WithdrawPage.happy.test.tsx` — happy-path:
   - заполняет форму валидными данными;
   - проверяет дизейбл submit при загрузке;
-  - мокает два вызова `fetch` (POST + GET) и ожидает блок `"Withdrawal created"`.
+  - мокает два вызова `fetch` (POST + GET) и ожидает блок `"Заявка создана"`.
 - `WithdrawPage.api-error.test.tsx` — ошибка API:
   - мокает ответ POST с `409`;
   - проверяет текст ошибки и то, что данные формы не потерялись.
@@ -102,4 +106,4 @@ npm run test:e2e
 
 - В проекте нет настоящей авторизации; access token нигде не хранится.
 - В реальном приложении токены/сессии должны храниться в httpOnly cookies, а не в `localStorage`, с защитой от CSRF (например, double submit cookie / SameSite=Lax + CSRF-токены).
-- API mock не рендерит и не возвращает сырое HTML; UI выводит только ожидаемые типизированные поля (`id`, `amount`, `destination`, `status`, `createdAt`).
+- API mock не рендерит и не возвращает сырое HTML; UI выводит только ожидаемые типизированные поля (`id`, `amount`, `destination`, `network`, `status`, `createdAt`).

@@ -30,7 +30,7 @@ describe("WithdrawPage - API error", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/already being processed/i),
+        screen.getByText(/уже обрабатывается/i),
       ).toBeInTheDocument();
     });
 

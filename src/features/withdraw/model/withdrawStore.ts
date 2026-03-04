@@ -171,8 +171,15 @@ export const useWithdrawStore = create<WithdrawStore>((set, get) => {
           lastWithdrawal: withdrawal,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unexpected error while creating withdrawal.";
+        let message = "Произошла непредвиденная ошибка при создании заявки на вывод.";
+
+        if (error instanceof Error) {
+          if (/already being processed/i.test(error.message)) {
+            message = "Запрос на вывод с этим ключом уже обрабатывается.";
+          } else {
+            message = error.message;
+          }
+        }
 
         wrappedSet({
           status: "error",
